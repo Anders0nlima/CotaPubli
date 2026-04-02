@@ -1,0 +1,10 @@
+/node_modules/
+/dist/
+/.env
+/.env.*.local
+/.env.local
+/inspiracoes/
+/inspiracoes_code/
+.DS_Store
+*.log
+/frontend/.next/
