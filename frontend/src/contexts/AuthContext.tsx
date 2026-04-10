@@ -39,17 +39,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [supabaseUser, setSupabaseUser] = useState<SupabaseUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchProfile = async (authId: string) => {
+  const fetchProfile = async (authId: string, fetchedUser?: SupabaseUser) => {
+    // maybeSingle previne o "Error 406 (Not Acceptable)" quando a tabela estiver vazia para esse usuário
     const { data, error } = await supabase
       .from("users")
       .select("*")
       .eq("auth_id", authId)
-      .single();
+      .maybeSingle();
 
     if (data && !error) {
       setUser(data as UserProfile);
+      return data;
     }
-    return data;
+
+    const activeUser = fetchedUser || supabaseUser;
+
+    // Se não encontrou o perfil (data vindo null), indica que o usuário logou (ex: via Google) mas o perfil público não foi criado
+    if (!data && activeUser) {
+      const email = activeUser.email || "";
+      const name = activeUser.user_metadata?.full_name || activeUser.user_metadata?.name || email.split("@")[0] || "Usuário";
+      const avatar_url = activeUser.user_metadata?.avatar_url || null;
+
+      // Cria o perfil faltante assumindo o default 'buyer', que o usuário pode trocar no painel depois.
+      const { data: newProfile, error: insertError } = await supabase
+        .from("users")
+        .insert({
+          auth_id: authId,
+          email,
+          name,
+          role: "buyer",
+          avatar_url,
+        })
+        .select()
+        .single();
+
+      if (!insertError && newProfile) {
+        setUser(newProfile as UserProfile);
+        return newProfile;
+      }
+    }
+
+    return null;
   };
 
   const refreshProfile = async () => {
@@ -64,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(s);
       setSupabaseUser(s?.user ?? null);
       if (s?.user) {
-        fetchProfile(s.user.id).finally(() => setIsLoading(false));
+        fetchProfile(s.user.id, s.user).finally(() => setIsLoading(false));
       } else {
         setIsLoading(false);
       }
@@ -76,7 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(s);
         setSupabaseUser(s?.user ?? null);
         if (s?.user) {
-          await fetchProfile(s.user.id);
+          await fetchProfile(s.user.id, s.user);
         } else {
           setUser(null);
         }
