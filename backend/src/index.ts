@@ -7,7 +7,8 @@ import webhookRoutes from './routes/webhook.routes';
 import materialsRoutes from './routes/materials.routes';
 import cardsRoutes from './routes/cards.routes';
 import adminRoutes from './routes/admin.routes';
-
+import listingRoutes from './routes/listing.routes';
+import orderRoutes from './routes/orders.routes';
 const app = express();
 const PORT = process.env.PORT ?? 4000;
 
@@ -25,8 +26,10 @@ app.use(express.json());
 
 // Routes
 app.use('/api/transactions', transactionRoutes);
+app.use('/api/orders', orderRoutes);
 app.use('/api/materials', materialsRoutes);
 app.use('/api/cards', cardsRoutes);
+app.use('/api/listings', listingRoutes);
 app.use('/api/admin', adminRoutes);
 
 // Health check

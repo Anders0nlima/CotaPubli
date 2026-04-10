@@ -53,10 +53,10 @@ export default function HomePage() {
                   Quero anunciar <ArrowRight className="h-5 w-5" />
                 </Link>
                 <Link
-                  href="/registro"
+                  href="/anunciar"
                   className="inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/30 text-lg h-14 px-8 rounded-xl font-semibold backdrop-blur-sm transition-all"
                 >
-                  Quero vender meu espaço
+                  Anuncie seu Espaço
                 </Link>
               </div>
 

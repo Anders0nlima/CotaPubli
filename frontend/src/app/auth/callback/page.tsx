@@ -2,16 +2,33 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
+  const { user, supabaseUser, isLoading } = useAuth();
 
   useEffect(() => {
-    // Supabase handles the OAuth callback automatically via the client
-    // Just redirect to dashboard after a short delay
-    const timeout = setTimeout(() => router.push("/dashboard"), 1000);
-    return () => clearTimeout(timeout);
-  }, [router]);
+    if (isLoading) return;
+
+    if (!supabaseUser) {
+      router.push("/login");
+      return;
+    }
+
+    // Se usuário já foi carregado no AuthContext
+    if (user) {
+      if (!user.accepted_terms_at || !user.birth_date) {
+        // Falta preencher perfil (veio do Google Auth pela 1ª vez)
+        router.push("/completar-perfil");
+      } else {
+        // Já tem o perfil completo, pode mandar pra /anunciar ou / (Home)
+        // Como você sugeriu no doc, quem finaliza cadastro já vai direto
+        // se já tem conta completa vindo do google, vai pra home.
+        router.push("/");
+      }
+    }
+  }, [isLoading, user, supabaseUser, router]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">

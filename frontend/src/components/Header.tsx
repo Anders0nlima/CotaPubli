@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Menu, X, ShoppingCart, LayoutDashboard, Heart,
-  ArrowLeftRight, User, ShoppingBag, Store, LogOut,
+  User, ShoppingBag, Store, LogOut, Plus, Megaphone,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn, getInitials } from "@/lib/utils";
@@ -19,7 +19,7 @@ export function Header({ variant = "solid" }: HeaderProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const router = useRouter();
-  const { user, isAuthenticated, logout, setUserRole, isLoading } = useAuth();
+  const { user, isAuthenticated, logout, isLoading } = useAuth();
 
   const handleLogout = async () => {
     await logout();
@@ -27,14 +27,14 @@ export function Header({ variant = "solid" }: HeaderProps) {
     toast.success("Você saiu da sua conta");
   };
 
-  const handleToggleRole = () => {
-    if (!user) return;
-    const newRole = user.role === "buyer" ? "seller" : "buyer";
-    setUserRole(newRole as any);
-    toast.success(newRole === "buyer" ? "Perfil: Comprador" : "Perfil: Vendedor");
-    setDropdownOpen(false);
-    router.push("/");
-  };
+  // Determine the CTA destination
+  const anunciarHref = user?.draft_count && user.draft_count > 0
+    ? "/anunciar" // Will auto-resume the draft
+    : "/anunciar";
+
+  const anunciarLabel = user?.draft_count && user.draft_count > 0
+    ? "Continue seu anúncio"
+    : "Anuncie seu Espaço";
 
   return (
     <header
@@ -63,15 +63,18 @@ export function Header({ variant = "solid" }: HeaderProps) {
             <Link href="/como-funciona" className="text-gray-600 hover:text-[#1e3a8a] transition-colors text-sm font-medium">
               Como funciona
             </Link>
-            {!isAuthenticated && (
-              <Link href="/para-donos-de-midia" className="text-gray-600 hover:text-[#1e3a8a] transition-colors text-sm font-medium">
-                Para donos de mídia
-              </Link>
-            )}
           </nav>
 
           {/* Right Section */}
           <div className="hidden md:flex items-center gap-3">
+            {/* Anuncie seu Espaço — Always visible */}
+            <Link
+              href={anunciarHref}
+              className="text-sm font-medium text-gray-700 hover:text-[#1e3a8a] transition-colors px-3 py-2 hover:bg-gray-50 rounded-lg"
+            >
+              {isAuthenticated ? anunciarLabel : "Anuncie seu Espaço"}
+            </Link>
+
             {/* Cart */}
             <Link href="/carrinho" className="relative p-2 hover:bg-gray-100 rounded-lg transition-colors">
               <ShoppingCart className="h-5 w-5 text-gray-600" />
@@ -106,9 +109,11 @@ export function Header({ variant = "solid" }: HeaderProps) {
                         <div className="px-4 py-3 border-b border-gray-100">
                           <p className="text-sm font-semibold">{user.name}</p>
                           <p className="text-xs text-gray-500">{user.email}</p>
-                          <p className="text-xs text-[#f97316] font-medium mt-1 capitalize">
-                            {user.role === "buyer" ? "Comprador" : user.role === "seller" ? "Vendedor" : "Admin"}
-                          </p>
+                          {user.has_listings && (
+                            <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 bg-[#f97316]/10 text-[#f97316] rounded-full text-xs font-medium">
+                              <Megaphone className="h-3 w-3" /> Anunciante
+                            </span>
+                          )}
                         </div>
                         <Link href="/minha-conta" onClick={() => setDropdownOpen(false)} className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
                           <User className="h-4 w-4" /> Minha Conta
@@ -119,16 +124,15 @@ export function Header({ variant = "solid" }: HeaderProps) {
                         <Link href="/favoritos" onClick={() => setDropdownOpen(false)} className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
                           <Heart className="h-4 w-4" /> Favoritos
                         </Link>
-                        {user.role === "seller" && (
+                        {user.has_listings && (
                           <Link href="/dashboard" onClick={() => setDropdownOpen(false)} className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-                            <Store className="h-4 w-4" /> Minhas Mídias
+                            <Store className="h-4 w-4" /> Meus Anúncios
                           </Link>
                         )}
                         <div className="border-t border-gray-100 my-1" />
-                        <button onClick={handleToggleRole} className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors w-full">
-                          <ArrowLeftRight className="h-4 w-4" />
-                          Alternar para {user.role === "buyer" ? "Vendedor" : "Comprador"}
-                        </button>
+                        <Link href="/anunciar" onClick={() => setDropdownOpen(false)} className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                          <Plus className="h-4 w-4" /> Criar novo anúncio
+                        </Link>
                         <div className="border-t border-gray-100 my-1" />
                         <button onClick={handleLogout} className="flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors w-full">
                           <LogOut className="h-4 w-4" /> Sair
@@ -144,7 +148,7 @@ export function Header({ variant = "solid" }: HeaderProps) {
                   <Link href="/login" className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-[#1e3a8a] transition-colors">
                     Entrar
                   </Link>
-                  <Link href="/registro" className="px-5 py-2.5 text-sm font-medium bg-[#f97316] hover:bg-[#ea580c] text-white rounded-lg transition-colors shadow-sm">
+                  <Link href="/login" className="px-5 py-2.5 text-sm font-medium bg-[#f97316] hover:bg-[#ea580c] text-white rounded-lg transition-colors shadow-sm">
                     Cadastrar
                   </Link>
                 </>
@@ -164,15 +168,20 @@ export function Header({ variant = "solid" }: HeaderProps) {
             <div className="flex flex-col gap-3">
               <Link href="/explorar" onClick={() => setMobileOpen(false)} className="text-gray-700 hover:text-[#1e3a8a] py-2">Explorar</Link>
               <Link href="/como-funciona" onClick={() => setMobileOpen(false)} className="text-gray-700 hover:text-[#1e3a8a] py-2">Como funciona</Link>
-              {!isAuthenticated && (
-                <Link href="/para-donos-de-midia" onClick={() => setMobileOpen(false)} className="text-gray-700 hover:text-[#1e3a8a] py-2">Para donos de mídia</Link>
-              )}
+              <Link href="/anunciar" onClick={() => setMobileOpen(false)} className="text-gray-700 hover:text-[#1e3a8a] py-2 font-medium">
+                {isAuthenticated ? anunciarLabel : "Anuncie seu Espaço"}
+              </Link>
               <div className="border-t pt-3 mt-1" />
               {isAuthenticated && user ? (
                 <>
                   <Link href="/dashboard" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 text-gray-700 hover:text-[#1e3a8a] py-2">
                     <LayoutDashboard className="h-4 w-4" /> Meu Painel
                   </Link>
+                  {user.has_listings && (
+                    <Link href="/dashboard" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 text-gray-700 hover:text-[#1e3a8a] py-2">
+                      <Store className="h-4 w-4" /> Meus Anúncios
+                    </Link>
+                  )}
                   <button onClick={() => { handleLogout(); setMobileOpen(false); }} className="flex items-center gap-2 text-red-600 py-2">
                     <LogOut className="h-4 w-4" /> Sair
                   </button>
@@ -180,7 +189,7 @@ export function Header({ variant = "solid" }: HeaderProps) {
               ) : (
                 <>
                   <Link href="/login" onClick={() => setMobileOpen(false)} className="py-2 text-center border border-gray-200 rounded-lg text-gray-700">Entrar</Link>
-                  <Link href="/registro" onClick={() => setMobileOpen(false)} className="py-2 text-center bg-[#f97316] text-white rounded-lg">Cadastrar</Link>
+                  <Link href="/login" onClick={() => setMobileOpen(false)} className="py-2 text-center bg-[#f97316] text-white rounded-lg">Cadastrar</Link>
                 </>
               )}
             </div>

@@ -32,10 +32,31 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     .single();
 
   if (!profile) {
-    res.status(403).json({ error: 'User profile not found' });
-    return;
+    console.log(`[AuthMiddleware] Profile missing for ${user.id}, creating auto-sync profile...`);
+    
+    // Auto-create profile if missing (resilience against missing triggers or race conditions)
+    const { data: newProfile, error: insertError } = await supabase
+      .from('users')
+      .upsert({
+        auth_id: user.id,
+        email: user.email,
+        name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Usuário',
+        role: 'buyer',
+        avatar_url: user.user_metadata?.avatar_url || null
+      }, { onConflict: 'auth_id' })
+      .select('id, role, name, email, mp_user_id, is_certified, is_active')
+      .single();
+
+    if (insertError || !newProfile) {
+      console.error(`[AuthMiddleware] Failed to auto-create profile:`, insertError);
+      res.status(403).json({ error: 'User profile not synchronized and auto-creation failed.', details: insertError });
+      return;
+    }
+
+    (req as any).user = newProfile;
+  } else {
+    (req as any).user = profile;
   }
 
-  (req as any).user = profile;
   next();
 }

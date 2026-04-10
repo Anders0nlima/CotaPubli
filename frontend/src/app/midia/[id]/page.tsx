@@ -5,11 +5,65 @@ import Link from "next/link";
 import { ArrowLeft, MapPin, Users, Star, BadgeCheck, ShoppingCart, MessageCircle, Heart, Share2 } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { mediaListings } from "@/data/mediaData";
+import { useCartStore } from "@/stores/cartStore";
+import toast from "react-hot-toast";
 
 export default function MidiaDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const media = mediaListings.find((m) => m.id === id);
+  const [media, setMedia] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const addItem = useCartStore(state => state.addItem);
+
+  useEffect(() => {
+    async function fetchDetailedMedia() {
+      try {
+        const res = await fetch(`http://localhost:4000/api/cards/${id}`);
+        if (res.ok) {
+          const card = await res.json();
+          const user = Array.isArray(card.users) ? card.users[0] : card.users;
+          setMedia({
+            id: card.id,
+            title: card.title || 'Sem título',
+            type: card.media_type || 'Digital',
+            location: card.location_city ? `${card.location_city}, ${card.location_state}` : 'Nacional',
+            price: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(card.price || 0),
+            priceNumber: Number(card.price) || 0,
+            reach: card.metrics?.avg_reach ? `${(card.metrics.avg_reach / 1000).toFixed(0)}k alcançados` : 'Visualizações não med.',
+            image: card.cover_url || 'https://images.unsplash.com/photo-1542204165-65bf26472b9b?auto=format&fit=crop&q=80',
+            description: card.description,
+            seller: user?.name || 'Vendedor',
+            rating: 5.0,
+            verified: user?.is_certified || false
+          });
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchDetailedMedia();
+  }, [id]);
+
+  const handleAddToCart = () => {
+    addItem({
+      id: media.id,
+      title: media.title,
+      price: media.priceNumber,
+      image: media.image,
+      type: media.type,
+      seller: media.seller
+    });
+    toast.success("Adicionado ao carrinho!");
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+         <div className="animate-spin h-10 w-10 border-4 border-[#1e3a8a] border-t-transparent rounded-full" />
+      </div>
+    );
+  }
 
   if (!media) {
     return (
@@ -95,11 +149,15 @@ export default function MidiaDetailPage({ params }: { params: Promise<{ id: stri
               <p className="text-3xl font-bold text-[#1e3a8a] mb-2">{media.price}</p>
               <p className="text-sm text-gray-500 mb-6">Preço por período de veiculação</p>
 
-              <Link
-                href={`/checkout/${media.id}`}
+              <button
+                onClick={handleAddToCart}
                 className="w-full flex items-center justify-center gap-2 bg-[#f97316] hover:bg-[#ea580c] text-white py-3.5 rounded-xl font-semibold transition-all hover:scale-[1.02] shadow-md mb-3"
               >
-                <ShoppingCart className="h-5 w-5" /> Comprar agora
+                <ShoppingCart className="h-5 w-5" /> Adicionar ao Carrinho
+              </button>
+              
+              <Link href="/carrinho" className="w-full flex items-center justify-center text-sm font-semibold text-[#1e3a8a] py-2 mb-3">
+                 Ir para o Carrinho
               </Link>
 
               <button className="w-full flex items-center justify-center gap-2 border-2 border-[#1e3a8a] text-[#1e3a8a] hover:bg-[#1e3a8a] hover:text-white py-3.5 rounded-xl font-semibold transition-all mb-6">

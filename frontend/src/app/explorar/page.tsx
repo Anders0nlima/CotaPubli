@@ -6,7 +6,7 @@ import { Search, SlidersHorizontal, X } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { MediaCard } from "@/components/MediaCard";
-import { mediaListings } from "@/data/mediaData";
+import { useEffect } from "react";
 
 const mediaTypes = ["Outdoor", "Painel LED", "TV", "Rádio", "Influenciador Digital", "Parada de Ônibus"];
 
@@ -21,6 +21,42 @@ function MarketplaceContent() {
   const [sortBy, setSortBy] = useState("relevance");
   const [selectedTypes, setSelectedTypes] = useState<string[]>(tipoParam ? [tipoParam] : []);
   const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [dbCards, setDbCards] = useState<any[]>([]);
+  const [loadingCards, setLoadingCards] = useState(true);
+
+  useEffect(() => {
+    async function fetchCards() {
+      try {
+        const res = await fetch("http://localhost:4000/api/cards");
+        if (res.ok) {
+          const data = await res.json();
+          const mapped = data.map((card: any) => {
+            const user = Array.isArray(card.users) ? card.users[0] : card.users;
+            return {
+              id: card.id,
+              title: card.title || 'Sem título',
+              type: card.media_type || 'Digital',
+              location: card.location_city ? `${card.location_city}, ${card.location_state}` : 'Nacional',
+              price: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(card.price || 0),
+              priceNumber: Number(card.price) || 0,
+              reach: card.metrics?.avg_reach ? `${(card.metrics.avg_reach / 1000).toFixed(0)}k alcançados` : 'Visualizações não medidas',
+              reachNumber: card.metrics?.avg_reach || 0,
+              image: card.cover_url || 'https://images.unsplash.com/photo-1542204165-65bf26472b9b?auto=format&fit=crop&q=80',
+              seller: user?.name || 'Vendedor',
+              rating: 5.0,
+              verified: user?.is_certified || false
+            };
+          });
+          setDbCards(mapped);
+        }
+      } catch (err) {
+        console.error("Failed to fetch API cards", err);
+      } finally {
+        setLoadingCards(false);
+      }
+    }
+    fetchCards();
+  }, []);
 
   const toggleType = (type: string) => {
     setSelectedTypes((prev) =>
@@ -38,7 +74,7 @@ function MarketplaceContent() {
   };
 
   const filtered = useMemo(() => {
-    let result = [...mediaListings];
+    let result = [...dbCards];
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -149,7 +185,11 @@ function MarketplaceContent() {
               </select>
             </div>
 
-            {filtered.length > 0 ? (
+            {loadingCards ? (
+              <div className="flex justify-center items-center py-20">
+                 <div className="animate-spin h-10 w-10 border-4 border-[#1e3a8a] border-t-transparent rounded-full" />
+              </div>
+            ) : filtered.length > 0 ? (
               <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-6">
                 {filtered.map((media) => (
                   <MediaCard key={media.id} {...media} />

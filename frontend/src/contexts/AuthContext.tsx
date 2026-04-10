@@ -4,17 +4,19 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 import { supabase } from "@/lib/supabase";
 import type { User as SupabaseUser, Session } from "@supabase/supabase-js";
 
-export type UserRole = "buyer" | "seller" | "admin";
-
 export interface UserProfile {
   id: string;
   auth_id: string;
-  role: UserRole;
+  role: string;
   name: string;
   email: string;
   avatar_url: string | null;
+  birth_date: string | null;
+  accepted_terms_at: string | null;
   is_certified: boolean;
   is_active: boolean;
+  has_listings: boolean;
+  draft_count: number;
 }
 
 interface AuthContextType {
@@ -24,10 +26,9 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string, role: UserRole) => Promise<void>;
+  register: (email: string, password: string, name: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
-  setUserRole: (role: UserRole) => void;
   refreshProfile: () => Promise<void>;
 }
 
@@ -40,7 +41,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchProfile = async (authId: string, fetchedUser?: SupabaseUser) => {
-    // maybeSingle previne o "Error 406 (Not Acceptable)" quando a tabela estiver vazia para esse usuário
     const { data, error } = await supabase
       .from("users")
       .select("*")
@@ -48,19 +48,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .maybeSingle();
 
     if (data && !error) {
-      setUser(data as UserProfile);
-      return data;
+      // Buscar contagem de listings/drafts
+      const { count: totalCount } = await supabase
+        .from("media_cards")
+        .select("*", { count: "exact", head: true })
+        .eq("seller_id", data.id)
+        .neq("status", "draft");
+
+      const { count: draftCount } = await supabase
+        .from("media_cards")
+        .select("*", { count: "exact", head: true })
+        .eq("seller_id", data.id)
+        .eq("status", "draft");
+
+      const profile: UserProfile = {
+        ...data,
+        has_listings: (totalCount ?? 0) > 0,
+        draft_count: draftCount ?? 0,
+      };
+      setUser(profile);
+      return profile;
     }
 
     const activeUser = fetchedUser || supabaseUser;
 
-    // Se não encontrou o perfil (data vindo null), indica que o usuário logou (ex: via Google) mas o perfil público não foi criado
+    // Se não encontrou o perfil, cria automaticamente como buyer
     if (!data && activeUser) {
       const email = activeUser.email || "";
       const name = activeUser.user_metadata?.full_name || activeUser.user_metadata?.name || email.split("@")[0] || "Usuário";
       const avatar_url = activeUser.user_metadata?.avatar_url || null;
 
-      // Cria o perfil faltante assumindo o default 'buyer', que o usuário pode trocar no painel depois.
       const { data: newProfile, error: insertError } = await supabase
         .from("users")
         .insert({
@@ -74,8 +91,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .single();
 
       if (!insertError && newProfile) {
-        setUser(newProfile as UserProfile);
-        return newProfile;
+        const profile: UserProfile = {
+          ...newProfile,
+          has_listings: false,
+          draft_count: 0,
+        };
+        setUser(profile);
+        return profile;
       }
     }
 
@@ -89,7 +111,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    // Get initial session
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       setSupabaseUser(s?.user ?? null);
@@ -100,7 +121,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, s) => {
         setSession(s);
@@ -121,21 +141,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   };
 
-  const register = async (email: string, password: string, name: string, role: UserRole) => {
+  const register = async (email: string, password: string, name: string) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { name, role } },
+      options: { data: { name } },
     });
     if (error) throw error;
 
-    // Create user profile
+    // Create user profile — always as buyer (conta única)
     if (data.user) {
       const { error: profileError } = await supabase.from("users").insert({
         auth_id: data.user.id,
         email,
         name,
-        role,
+        role: "buyer",
+        accepted_terms_at: new Date().toISOString(),
       });
       if (profileError) console.error("Profile creation error:", profileError);
     }
@@ -156,13 +177,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSupabaseUser(null);
   };
 
-  const setUserRole = (role: UserRole) => {
-    if (user) {
-      setUser({ ...user, role });
-      supabase.from("users").update({ role }).eq("id", user.id);
-    }
-  };
-
   return (
     <AuthContext.Provider
       value={{
@@ -175,7 +189,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         register,
         loginWithGoogle,
         logout,
-        setUserRole,
         refreshProfile,
       }}
     >
