@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
@@ -8,14 +9,25 @@ import { useListingStore } from "@/stores/listingStore";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
 
-// Steps
 import StepOverview from "./steps/StepOverview";
-import StepCategory from "./steps/StepCategory";
-import StepLocation from "./steps/StepLocation";
-import StepPhotos from "./steps/StepPhotos";
-import StepTitleDescription from "./steps/StepTitleDescription";
-import StepPrice from "./steps/StepPrice";
-import StepReview from "./steps/StepReview";
+
+function StepChunkFallback() {
+  return (
+    <div className="flex min-h-[50vh] items-center justify-center" aria-busy>
+      <div className="h-9 w-9 animate-spin rounded-full border-4 border-[#1e3a8a] border-t-transparent" />
+    </div>
+  );
+}
+
+const dynamicStep = (importer: () => Promise<{ default: React.ComponentType<{ onNext: () => void; onPublish?: () => void }> }>) =>
+  dynamic(importer, { loading: StepChunkFallback });
+
+const StepCategory = dynamicStep(() => import("./steps/StepCategory"));
+const StepLocation = dynamicStep(() => import("./steps/StepLocation"));
+const StepPhotos = dynamicStep(() => import("./steps/StepPhotos"));
+const StepTitleDescription = dynamicStep(() => import("./steps/StepTitleDescription"));
+const StepPrice = dynamicStep(() => import("./steps/StepPrice"));
+const StepReview = dynamicStep(() => import("./steps/StepReview"));
 
 const TOTAL_STEPS = 7;
 
@@ -43,32 +55,31 @@ export default function AnunciarPage() {
     loadFromServer,
   } = useListingStore();
 
-  const [initialized, setInitialized] = useState(false);
-
-  // Check for existing drafts on mount, but ONLY after auth is resolved
+  // Hidrata rascunho em background: não bloquear o primeiro paint (antes esperava a API).
   useEffect(() => {
-    if (authLoading) return; // Wait for AuthContext
+    if (authLoading) return;
     if (!isAuthenticated || !user) {
       router.push("/login");
       return;
     }
 
+    let cancelled = false;
     const loadDraft = async () => {
       try {
         const { data } = await api.get("/listings/my/drafts");
+        if (cancelled) return;
         if (data && data.length > 0) {
-          // Load the most recent draft
           loadFromServer(data[0]);
         }
-      } catch (err: any) {
+      } catch {
         console.warn("Nenhum rascunho encontrado ou erro de sincronismo");
-      } finally {
-        setInitialized(true);
       }
     };
     loadDraft();
-
-  }, [authLoading, isAuthenticated, user, router]);
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, isAuthenticated, user, router, loadFromServer]);
 
   const currentStep = draft.wizard_step;
   const StepComponent = STEP_COMPONENTS[currentStep] || StepOverview;
@@ -97,7 +108,15 @@ export default function AnunciarPage() {
       }
     } catch (err: any) {
       console.error("Failed to save draft:", err);
-      toast.error("Falha ao salvar rascunho. O painel deve criar uma conexão válida.");
+      const msg =
+        err?.response?.data?.error ??
+        err?.response?.data?.details ??
+        err?.message;
+      toast.error(
+        typeof msg === "string"
+          ? msg
+          : "Falha ao salvar rascunho. Verifique se a API está no ar e você está logado."
+      );
       throw err; // Re-throw to inform caller
     } finally {
       setLoading(false);
@@ -168,12 +187,12 @@ export default function AnunciarPage() {
   };
   const segments = getSegmentProgress();
 
-  if (authLoading || !initialized) {
+  if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
         <div className="flex flex-col items-center">
           <div className="animate-spin h-10 w-10 border-4 border-[#1e3a8a] border-t-transparent rounded-full mb-4" />
-          <p className="text-gray-500 text-sm font-medium">Sincronizando dados...</p>
+          <p className="text-gray-500 text-sm font-medium">Carregando...</p>
         </div>
       </div>
     );

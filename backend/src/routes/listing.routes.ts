@@ -5,9 +5,16 @@ import { z } from 'zod';
 
 const router = Router();
 
+const mediaTypeStored = z.enum(['tv', 'radio', 'outdoor', 'digital', 'influencer']);
+// UI envia "bus_stop" (parada de ônibus); o banco só aceita os 5 tipos acima.
+const mediaTypeField = z
+  .union([mediaTypeStored, z.literal('bus_stop')])
+  .transform((v) => (v === 'bus_stop' ? 'outdoor' : v))
+  .optional();
+
 // Schema parcial — wizard salva incrementalmente
 const draftSchema = z.object({
-  media_type: z.enum(['tv', 'radio', 'outdoor', 'digital', 'influencer']).optional(),
+  media_type: mediaTypeField,
   title: z.string().max(120).optional(),
   description: z.string().optional(),
   price: z.number().positive().optional(),

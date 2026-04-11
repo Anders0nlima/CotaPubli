@@ -48,18 +48,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .maybeSingle();
 
     if (data && !error) {
-      // Buscar contagem de listings/drafts
-      const { count: totalCount } = await supabase
-        .from("media_cards")
-        .select("*", { count: "exact", head: true })
-        .eq("seller_id", data.id)
-        .neq("status", "draft");
-
-      const { count: draftCount } = await supabase
-        .from("media_cards")
-        .select("*", { count: "exact", head: true })
-        .eq("seller_id", data.id)
-        .eq("status", "draft");
+      const [{ count: totalCount }, { count: draftCount }] = await Promise.all([
+        supabase
+          .from("media_cards")
+          .select("*", { count: "exact", head: true })
+          .eq("seller_id", data.id)
+          .neq("status", "draft"),
+        supabase
+          .from("media_cards")
+          .select("*", { count: "exact", head: true })
+          .eq("seller_id", data.id)
+          .eq("status", "draft"),
+      ]);
 
       const profile: UserProfile = {
         ...data,
